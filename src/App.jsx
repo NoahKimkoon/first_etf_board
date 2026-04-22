@@ -5,6 +5,8 @@ import ETFSelector from './components/ETFSelector'
 import getQuote from './api/getQuote'
 import getExchangeRate, { detectCurrency } from './api/getExchangeRate'
 import ETF_PRESET from './data/etfPreset'
+import { db } from './firebase'
+import { collection, addDoc, deleteDoc, doc, onSnapshot, query, where } from 'firebase/firestore'
 
 Chart.register(...registerables)
 
@@ -17,35 +19,13 @@ function App() {
   // ✅ 활성 탭 상태 관리
   const [activeTab, setActiveTab] = useState('investment');
 
-  // localStorage에서 데이터 로드
-  const [etfs, setEtfs] = useState(() => {
-    try {
-      const saved = localStorage.getItem('etf-dashboard-data');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  // ✅ 배당 데이터 독립 상태 (투자 데이터와 완전 분리)
-  const [dividendList, setDividendList] = useState(() => {
-    try {
-      const saved = localStorage.getItem('etf-dividend-data');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  // ✅ 아이 자산 독립 상태 (완전 분리)
-  const [kidsEtfs, setKidsEtfs] = useState(() => {
-    try {
-      const saved = localStorage.getItem('etf-kids-data');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Firestore 실시간 데이터 상태
+  const [etfs, setEtfs] = useState([]);
+  const [dividendList, setDividendList] = useState([]);
+  const [kidsEtfs, setKidsEtfs] = useState([]);
+  
+  // 임시 사용자 ID
+  const USER_ID = "guest";
 
   // 실시간 가격 상태
   const [prices, setPrices] = useState({});
@@ -84,20 +64,68 @@ function App() {
   const pieChartRef = useRef(null);
   const pieChartInstance = useRef(null);
 
-  // localStorage 자동 저장
+  // ✅ Firestore 실시간 리스너 설정
   useEffect(() => {
-    localStorage.setItem('etf-dashboard-data', JSON.stringify(etfs));
-  }, [etfs]);
+    console.log('✅ Firestore 리스너 시작');
+    
+    // ETF 컬렉션 리스너
+    const etfQuery = query(collection(db, 'etfs'), where('userId', '==', USER_ID));
+    const unsubEtfs = onSnapshot(etfQuery, 
+      (snapshot) => {
+        console.log('✅ ETF 데이터 수신:', snapshot.size, '개');
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        console.log('✅ 로드된 ETF 데이터:', data);
+        setEtfs(data);
+      },
+      (error) => {
+        console.error('❌ ETF 리스너 오류:', error);
+        console.error('❌ 오류 코드:', error.code);
+      }
+    );
 
-  // ✅ 배당 데이터 별도 자동 저장
-  useEffect(() => {
-    localStorage.setItem('etf-dividend-data', JSON.stringify(dividendList));
-  }, [dividendList]);
+    // 배당 컬렉션 리스너
+    const dividendQuery = query(collection(db, 'dividendList'), where('userId', '==', USER_ID));
+    const unsubDividends = onSnapshot(dividendQuery, 
+      (snapshot) => {
+        console.log('✅ 배당 데이터 수신:', snapshot.size, '개');
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setDividendList(data);
+      },
+      (error) => {
+        console.error('❌ 배당 리스너 오류:', error);
+      }
+    );
 
-  // ✅ 아이 자산 별도 자동 저장
-  useEffect(() => {
-    localStorage.setItem('etf-kids-data', JSON.stringify(kidsEtfs));
-  }, [kidsEtfs]);
+    // 아이 ETF 컬렉션 리스너
+    const kidsQuery = query(collection(db, 'kidsEtfs'), where('userId', '==', USER_ID));
+    const unsubKids = onSnapshot(kidsQuery, 
+      (snapshot) => {
+        console.log('✅ 아이 ETF 데이터 수신:', snapshot.size, '개');
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setKidsEtfs(data);
+      },
+      (error) => {
+        console.error('❌ 아이 ETF 리스너 오류:', error);
+      }
+    );
+
+    // 클린업 함수
+    return () => {
+      console.log('✅ Firestore 리스너 정리');
+      unsubEtfs();
+      unsubDividends();
+      unsubKids();
+    };
+  }, []);
 
   // ✅ 다크모드 테마 토글
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -264,48 +292,59 @@ function App() {
     }));
   };
 
-  // ✅ ETF 추가 (개별 매수 기록 유지)
-  const addEtf = (e) => {
+  // ✅ ETF 추가 (Firestore)
+  const addEtf = async (e) => {
     e.preventDefault();
     if (!newEtf.selectedETF || !newEtf.buyPrice || !newEtf.quantity) return;
 
-    // 항상 새로운 개별 항목으로 추가 (매수 이력 개별 보존)
-    const etf = {
-      id: Date.now(),
+    const etfData = {
+      userId: USER_ID,
       name: newEtf.selectedETF.name,
       ticker: newEtf.selectedETF.ticker,
       buyPrice: parseInt(newEtf.buyPrice),
       quantity: parseInt(newEtf.quantity),
       dividendPerShare: 0,
-      dividendCycle: 'quarterly' // monthly, quarterly, yearly
+      dividendCycle: 'quarterly',
+      createdAt: new Date()
     };
     
-    setEtfs([...etfs, etf]);
-    setNewEtf({ selectedETF: null, buyPrice: '', quantity: '' });
+    console.log('✅ 저장하려는 ETF 데이터:', etfData);
+    
+    try {
+      const docRef = await addDoc(collection(db, 'etfs'), etfData);
+      console.log('✅ Firestore 저장 성공! 문서 ID:', docRef.id);
+      setNewEtf({ selectedETF: null, buyPrice: '', quantity: '' });
+    } catch (error) {
+      console.error('❌ Firestore 저장 오류:', error);
+      console.error('❌ 오류 코드:', error.code);
+      console.error('❌ 오류 메시지:', error.message);
+      alert('저장 오류: ' + error.message);
+    }
   };
 
-  // ✅ 아이 자산 ETF 추가
-  const addKidsEtf = (e) => {
+  // ✅ 아이 자산 ETF 추가 (Firestore)
+  const addKidsEtf = async (e) => {
     e.preventDefault();
     if (!newKidsEtf.selectedETF || !newKidsEtf.buyPrice || !newKidsEtf.quantity) return;
 
-    const etf = {
-      id: Date.now(),
+    const etfData = {
+      userId: USER_ID,
       name: newKidsEtf.selectedETF.name,
       ticker: newKidsEtf.selectedETF.ticker,
       buyPrice: parseInt(newKidsEtf.buyPrice),
       quantity: parseInt(newKidsEtf.quantity),
       dividendPerShare: 0,
-      dividendCycle: 'quarterly'
+      dividendCycle: 'quarterly',
+      createdAt: new Date()
     };
     
-    setKidsEtfs([...kidsEtfs, etf]);
+    await addDoc(collection(db, 'kidsEtfs'), etfData);
     setNewKidsEtf({ selectedETF: null, buyPrice: '', quantity: '' });
   };
 
-  // ETF 삭제
-  const removeEtf = (id) => {
-    setEtfs(etfs.filter(etf => etf.id !== id));
+  // ETF 삭제 (Firestore)
+  const removeEtf = async (id) => {
+    await deleteDoc(doc(db, 'etfs', id));
     setPrices(prev => {
       const newPrices = { ...prev };
       delete newPrices[id];
@@ -313,9 +352,9 @@ function App() {
     });
   };
 
-  // ✅ 아이 자산 ETF 삭제
-  const removeKidsEtf = (id) => {
-    setKidsEtfs(kidsEtfs.filter(etf => etf.id !== id));
+  // ✅ 아이 자산 ETF 삭제 (Firestore)
+  const removeKidsEtf = async (id) => {
+    await deleteDoc(doc(db, 'kidsEtfs', id));
     setPrices(prev => {
       const newPrices = { ...prev };
       delete newPrices[id];
@@ -323,11 +362,9 @@ function App() {
     });
   };
 
-  // ✅ 배당 종목 추가
-  const addDividendItem = (e) => {
+  // ✅ 배당 종목 추가 (Firestore)
+  const addDividendItem = async (e) => {
     if (e) e.preventDefault();
-    
-    console.log('✅ 배당 추가 시도 데이터:', newDividend);
     
     // 유효성 검사 완화 (이름만 필수)
     if (!newDividend.name || newDividend.name.trim() === '') {
@@ -335,19 +372,18 @@ function App() {
       return;
     }
     
-    const item = {
-      id: Date.now(),
+    const dividendData = {
+      userId: USER_ID,
       name: newDividend.name.trim(),
       ticker: newDividend.ticker || '',
       currency: newDividend.currency,
       dividendPerShare: Number(newDividend.dividendPerShare) || 0,
       quantity: Number(newDividend.quantity) || 0,
-      dividendMonths: [...newDividend.dividendMonths]
+      dividendMonths: [...newDividend.dividendMonths],
+      createdAt: new Date()
     };
     
-    console.log('✅ 저장할 배당 아이템:', item);
-    
-    setDividendList(prev => [...prev, item]);
+    await addDoc(collection(db, 'dividendList'), dividendData);
     
     // 상태 초기화
     setNewDividend({
@@ -359,13 +395,11 @@ function App() {
       quantity: 0,
       dividendMonths: []
     });
-    
-    console.log('✅ 배당 목록 추가 완료');
   };
 
-  // ✅ 배당 종목 삭제
-  const removeDividendItem = (id) => {
-    setDividendList(dividendList.filter(item => item.id !== id));
+  // ✅ 배당 종목 삭제 (Firestore)
+  const removeDividendItem = async (id) => {
+    await deleteDoc(doc(db, 'dividendList', id));
   };
 
   // ✅ 배당월 토글
