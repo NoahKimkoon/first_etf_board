@@ -297,6 +297,7 @@ function App() {
     e.preventDefault();
     if (!newEtf.selectedETF || !newEtf.buyPrice || !newEtf.quantity) return;
 
+    const today = new Date();
     const etfData = {
       userId: USER_ID,
       name: newEtf.selectedETF.name,
@@ -305,7 +306,8 @@ function App() {
       quantity: parseInt(newEtf.quantity),
       dividendPerShare: 0,
       dividendCycle: 'quarterly',
-      createdAt: new Date()
+      createdAt: new Date(),
+      purchaseDate: `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     };
     
     console.log('✅ 저장하려는 ETF 데이터:', etfData);
@@ -327,6 +329,7 @@ function App() {
     e.preventDefault();
     if (!newKidsEtf.selectedETF || !newKidsEtf.buyPrice || !newKidsEtf.quantity) return;
 
+    const today = new Date();
     const etfData = {
       userId: USER_ID,
       name: newKidsEtf.selectedETF.name,
@@ -335,7 +338,8 @@ function App() {
       quantity: parseInt(newKidsEtf.quantity),
       dividendPerShare: 0,
       dividendCycle: 'quarterly',
-      createdAt: new Date()
+      createdAt: new Date(),
+      purchaseDate: `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     };
     
     await addDoc(collection(db, 'kidsEtfs'), etfData);

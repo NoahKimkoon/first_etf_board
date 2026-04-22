@@ -22,6 +22,23 @@ const ETFCard = ({ etf, onRemove, livePrice, exchangeRate }) => {
   const profit = currentValueKrw ? currentValueKrw - etf.buyPrice : null;
   const returnRate = currentValueKrw ? ((currentValueKrw - etf.buyPrice) / etf.buyPrice * 100).toFixed(2) : null;
 
+  // ✅ 연간 수익률 (CAGR) 계산
+  let annualizedReturn = null;
+  let holdingDays = 0;
+  
+  if (etf.purchaseDate && currentValueKrw) {
+    const purchaseDate = new Date(etf.purchaseDate);
+    const today = new Date();
+    const timeDiff = today.getTime() - purchaseDate.getTime();
+    holdingDays = Math.floor(timeDiff / (1000 * 3600 * 24));
+    
+    if (holdingDays >= 7) {
+      const totalReturn = currentValueKrw / etf.buyPrice;
+      const cagr = (Math.pow(totalReturn, 365 / holdingDays) - 1) * 100;
+      annualizedReturn = cagr.toFixed(2);
+    }
+  }
+
   const formatNumber = (num) => {
     return new Intl.NumberFormat('ko-KR').format(num);
   };
@@ -53,6 +70,8 @@ const ETFCard = ({ etf, onRemove, livePrice, exchangeRate }) => {
           <p className="text-sm text-slate-500 dark:text-slate-400">
             티커: {etf.ticker}
             {quote?.currency && <span className="ml-2 bg-slate-100 dark:bg-slate-600 px-2 py-0.5 rounded text-xs text-slate-600 dark:text-slate-200">{quote.currency}</span>}
+            {etf.purchaseDate && <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">📅 {etf.purchaseDate}</span>}
+            {holdingDays > 0 && <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">({holdingDays}일 보유)</span>}
           </p>
         </div>
         <button onClick={() => onRemove(etf.id)} className="text-slate-400 dark:text-slate-500 hover:text-red-500 px-3 py-2">✕</button>
@@ -102,9 +121,19 @@ const ETFCard = ({ etf, onRemove, livePrice, exchangeRate }) => {
         <div>
           <p className="text-xs text-slate-500 dark:text-slate-400">수익률 / 수익금</p>
           {returnRate !== null ? (
-            <p className={`font-bold ${returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-              {returnRate >= 0 ? '+' : ''}{returnRate} %
-            </p>
+            <div>
+              <p className={`font-bold ${returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                {returnRate >= 0 ? '+' : ''}{returnRate} %
+                {annualizedReturn && (
+                  <span className="text-xs ml-1 opacity-70">
+                    (연 {annualizedReturn >= 0 ? '+' : ''}{annualizedReturn}%)
+                  </span>
+                )}
+              </p>
+              {!annualizedReturn && holdingDays > 0 && holdingDays < 7 && (
+                <p className="text-[10px] text-slate-400 dark:text-slate-500">7일 미만 보유: 연간수익률 계산중</p>
+              )}
+            </div>
           ) : (
             <p className="font-medium text-slate-400 dark:text-slate-500">-</p>
           )}
