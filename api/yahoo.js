@@ -22,16 +22,23 @@ export default async function handler(req, res) {
     const response = await fetch(yahooUrl, {
       method: req.method,
       headers: {
-        'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
         'Referer': 'https://finance.yahoo.com/',
+        'Origin': 'https://finance.yahoo.com',
         'Cache-Control': 'no-cache'
       }
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Yahoo API Status: ${response.status}, Body: ${errorText}`);
+
+      // 404인 경우 티커가 없는 것, 403인 경우 차단된 것
       return res.status(response.status).json({ 
-        error: `Yahoo API 응답 오류: ${response.status}` 
+        error: `Yahoo API responded with ${response.status}`,
+        details: errorText.slice(0, 100) // 에러 원인 일부 출력
       });
     }
 
