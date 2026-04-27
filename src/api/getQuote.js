@@ -8,8 +8,8 @@ export async function getQuote(ticker) {
       return null;
     }
 
-    // Vercel Serverless Function 프록시 호출
-    const response = await fetch(`/api/quote?ticker=${encodeURIComponent(ticker.trim())}`, {
+    // Vite 개발 서버 프록시 호출 (CORS 우회)
+    const response = await fetch(`/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker.trim())}?interval=1m&range=1d`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
