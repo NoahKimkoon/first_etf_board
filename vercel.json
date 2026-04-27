@@ -2,27 +2,16 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
+      "source": "/api/yahoo",
+      "destination": "/api/yahoo.js"
+    },
+    {
+      "source": "/api/yahoo/*",
+      "destination": "/api/yahoo.js"
     },
     {
       "source": "/(.*)",
       "destination": "/index.html"
-    }
-  ],
-  "functions": {
-    "api/*.js": {
-      "memory": 128,
-      "maxDuration": 10
-    }
-  },
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" }
-      ]
     }
   ]
 }
