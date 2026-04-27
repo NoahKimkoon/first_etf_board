@@ -8,16 +8,12 @@ export async function getQuote(ticker) {
       return null;
     }
 
-    // CORS Proxy 우회 적용
-    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker.trim())}?interval=1m&range=1d`;
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-    
-    const response = await fetch(proxyUrl, {
+    // Vercel Serverless Function 프록시 호출
+    const response = await fetch(`/api/quote?ticker=${encodeURIComponent(ticker.trim())}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-      },
-      credentials: 'omit'
+      }
     });
 
     if (!response.ok) {
