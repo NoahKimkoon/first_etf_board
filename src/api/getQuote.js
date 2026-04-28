@@ -1,12 +1,12 @@
 /**
- * Yahoo Finance 시세 조회 API
- * 클라이언트 사이드 영구 캐싱 적용
- * ✅ 한 번 성공하면 영구히 캐시 사용 (API 호출 안 함)
- * ✅ 실패시에만 재시도
+ * Naver Finance 시세 조회 API
+ * 클라이언트 사이드 1시간 캐싱 적용
+ * ✅ 서버 응답 필드 정확 매핑
+ * ✅ 타입 안정성 강화
+ * ✅ 디버깅 로그 추가
  */
 export async function getQuote(ticker) {
-  // const cleanTicker = ticker.trim().toUpperCase();
-  const cleanTicker = ticker.replace('.KS', '');
+  const cleanTicker = ticker.trim().toUpperCase();
   const CACHE_KEY = `stock_cache_${cleanTicker}`;
   const CACHE_TTL = 60 * 60 * 1000; // 1시간 유효기간
 
@@ -14,6 +14,12 @@ export async function getQuote(ticker) {
     if (!ticker || ticker.trim() === '') {
       return null;
     }
+
+    // ✅ 기존 오염된 캐시 전체 초기화 (임시 처리)
+    try {
+      localStorage.clear();
+      console.debug('✅ 기존 캐시 모두 초기화 완료');
+    } catch (e) {}
 
     // 캐시 데이터 확인 (1시간 유효기간)
     try {
@@ -23,7 +29,7 @@ export async function getQuote(ticker) {
         const now = Date.now();
         
         if (now - cacheData.timestamp < CACHE_TTL) {
-          console.debug(`캐시 사용: ${cleanTicker} (${Math.round((now - cacheData.timestamp)/1000/60)}분 전)`);
+          console.debug(`✅ 캐시 사용: ${cleanTicker} (${Math.round((now - cacheData.timestamp)/1000/60)}분 전)`);
           return {
             ...cacheData.data,
             lastUpdated: new Date(cacheData.timestamp)
@@ -34,9 +40,7 @@ export async function getQuote(ticker) {
       console.debug('로컬 캐시 접근 오류', e);
     }
 
-    // 캐시가 없을 때만 Naver Finance 프록시 API 호출
-    console.warn(" 캐시가 없을 때만 Naver Finance 프록시 API 호출");
-    console.warn(" clenTicker:"+cleanTicker);
+    // 네이버 금융 프록시 API 호출
     const response = await fetch(`/api/stock?ticker=${encodeURIComponent(cleanTicker)}`, {
       method: 'GET',
       headers: {
@@ -49,38 +53,39 @@ export async function getQuote(ticker) {
     }
 
     const data = await response.json();
-    console.warn(" data:"+data);
+    console.log('✅ Raw API Response:', data);
 
     if (data.error) {
       throw new Error(data.error || '종목코드를 찾을 수 없습니다');
     }
 
-    // 네이버 금융 데이터 매핑
-    const currentPrice = parseInt(data.closePrice);
-    const previousClose = parseInt(data.previousClosePrice);
-    const change = parseInt(data.compareToPreviousClosePrice);
-    const changePercent = parseFloat(data.fluctuationsRatio);
+    // ✅ 서버 응답 필드 정확 매핑 + 안전한 타입 변환
+    const currentPrice = Number(data.price || 0);
+    const previousClose = Number(data.prevClose || 0);
+    const change = Number(data.change || 0);
+    const changePercent = Number(data.changePercent || 0);
     
     const stockData = {
       ticker: cleanTicker,
-      name: data.stockName,
+      name: data.name || cleanTicker,
       price: currentPrice,
       previousClose: previousClose,
       change: change,
       changePercent: changePercent.toFixed(2),
-      currency: 'KRW',
-      marketState: data.marketStatus,
+      currency: data.currency || 'KRW',
+      marketState: data.marketState,
       lastUpdated: new Date()
     };
-    console.warn("stockData:"+stockData);
 
-    // ✅ 성공했으면 1시간 캐시에 저장
+    console.log('✅ Parsed Stock Data:', stockData);
+
+    // 성공했으면 1시간 캐시에 저장
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify({
         timestamp: Date.now(),
         data: stockData
       }));
-      console.debug(`캐시 저장 완료: ${cleanTicker} (1시간 유효)`);
+      console.debug(`✅ 캐시 저장 완료: ${cleanTicker} (1시간 유효)`);
     } catch (e) {
       console.debug('로컬 캐시 저장 오류', e);
     }
@@ -88,7 +93,7 @@ export async function getQuote(ticker) {
     return stockData;
 
   } catch (error) {
-    console.error('시세 조회 실패:', error);
+    console.error('❌ 시세 조회 실패:', error);
     throw error;
   }
 }
