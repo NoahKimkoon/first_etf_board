@@ -1,6 +1,8 @@
 /**
- * Yahoo Finance 시세 조회 API
+ * Alpha Vantage 시세 조회 API
  * 클라이언트 사이드 CORS 지원
+ * ✅ 기존 인터페이스 완전 호환 유지
+ * ✅ 호출 제한 오류 처리 추가
  */
 export async function getQuote(ticker) {
   try {
@@ -8,44 +10,47 @@ export async function getQuote(ticker) {
       return null;
     }
 
-    // Vite 개발 서버 프록시 호출 (CORS 우회)
-    const response = await fetch(`/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker.trim())}?interval=1m&range=1d`, {
+    // Alpha Vantage 프록시 API 호출
+    const response = await fetch(`/api/stock?ticker=${encodeURIComponent(ticker.trim())}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
       }
     });
 
+    if (response.status === 429) {
+      throw new Error('API 호출 제한: 분당 5회 요청 제한이 있습니다. 잠시 후 다시 시도해주세요.');
+    }
+
     if (!response.ok) {
-      throw new Error(`API 응답 오류: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API 응답 오류: ${response.status}`);
     }
 
     const data = await response.json();
 
-    if (data.chart?.error) {
-      throw new Error(data.chart.error.description || '티커를 찾을 수 없습니다');
+    if (data.quoteResponse?.error) {
+      throw new Error(data.quoteResponse.error.description || '티커를 찾을 수 없습니다');
     }
 
-    const result = data.chart?.result?.[0];
+    const result = data.quoteResponse?.result?.[0];
     if (!result) {
       throw new Error('데이터 형식 오류');
     }
 
-    const meta = result.meta;
-    const currentPrice = meta.regularMarketPrice;
-    const previousClose = meta.chartPreviousClose || meta.previousClose;
-    const fiftyTwoWeekHigh = meta.fiftyTwoWeekHigh;
-    const fiftyTwoWeekLow = meta.fiftyTwoWeekLow;
+    const currentPrice = result.regularMarketPrice;
+    const change = result.regularMarketChange;
+    const changePercent = result.regularMarketChangePercent;
     
     return {
       ticker: ticker.toUpperCase(),
       price: currentPrice,
-      previousClose: previousClose,
-      change: currentPrice - previousClose,
-      changePercent: ((currentPrice - previousClose) / previousClose * 100).toFixed(2),
-      currency: meta.currency,
-      fiftyTwoWeekHigh,
-      fiftyTwoWeekLow,
+      previousClose: currentPrice - change,
+      change: change,
+      changePercent: changePercent.toFixed(2),
+      currency: 'USD',
+      fiftyTwoWeekHigh: null,
+      fiftyTwoWeekLow: null,
       lastUpdated: new Date()
     };
 

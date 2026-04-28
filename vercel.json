@@ -2,8 +2,8 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/api/yahoo",
-      "destination": "/api/yahoo.js"
+      "source": "/api/stock",
+      "destination": "/api/stock.js"
     },
     {
       "source": "/(.*)",
