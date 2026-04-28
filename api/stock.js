@@ -58,12 +58,30 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: `종목코드 ${ticker}의 데이터를 찾을 수 없습니다` });
     }
 
+    const raw = data.datas[0];
+
+    // 콤마가 포함된 문자열 숫자 변환
+    const convertNumber = (str) => {
+      if (!str) return 0;
+      return parseInt(str.toString().replace(/,/g, ''));
+    };
+
+    // 데이터 정제
+    const cleanedData = {
+      ...raw,
+      closePrice: convertNumber(raw.closePrice),
+      previousClosePrice: convertNumber(raw.previousClosePrice),
+      compareToPreviousClosePrice: convertNumber(raw.compareToPreviousClosePrice),
+      accumulatedTradingVolume: convertNumber(raw.accumulatedTradingVolume),
+      accumulatedTradingValue: convertNumber(raw.accumulatedTradingValue)
+    };
+
     // CORS 및 캐싱 헤더
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
 
-    return res.status(200).json(data.datas[0]);
+    return res.status(200).json(cleanedData);
 
   } catch (error) {
     console.error('Stock API 오류:', error);
