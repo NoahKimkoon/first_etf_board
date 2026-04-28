@@ -6,23 +6,28 @@
  */
 export async function getQuote(ticker) {
   const cleanTicker = ticker.trim().toUpperCase();
-  const CACHE_KEY = `stock_permanent_${cleanTicker}`;
+  const CACHE_KEY = `stock_cache_${cleanTicker}`;
+  const CACHE_TTL = 60 * 60 * 1000; // 1시간 유효기간
 
   try {
     if (!ticker || ticker.trim() === '') {
       return null;
     }
 
-    // 캐시 데이터 확인 (한 번 저장되면 영구 사용)
+    // 캐시 데이터 확인 (1시간 유효기간)
     try {
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
         const cacheData = JSON.parse(cached);
-        console.debug(`영구 캐시 사용: ${cleanTicker}`);
-        return {
-          ...cacheData,
-          lastUpdated: new Date(cacheData.lastUpdated)
-        };
+        const now = Date.now();
+        
+        if (now - cacheData.timestamp < CACHE_TTL) {
+          console.debug(`캐시 사용: ${cleanTicker} (${Math.round((now - cacheData.timestamp)/1000/60)}분 전)`);
+          return {
+            ...cacheData.data,
+            lastUpdated: new Date(cacheData.timestamp)
+          };
+        }
       }
     } catch (e) {
       console.debug('로컬 캐시 접근 오류', e);
@@ -67,10 +72,13 @@ export async function getQuote(ticker) {
       lastUpdated: new Date()
     };
 
-    // ✅ 성공했으면 영구 캐시에 저장 (앱 종료/새로고침 후에도 유지)
+    // ✅ 성공했으면 1시간 캐시에 저장
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(stockData));
-      console.debug(`캐시 저장 완료: ${cleanTicker} (이후 API 호출 안 함)`);
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        timestamp: Date.now(),
+        data: stockData
+      }));
+      console.debug(`캐시 저장 완료: ${cleanTicker} (1시간 유효)`);
     } catch (e) {
       console.debug('로컬 캐시 저장 오류', e);
     }
