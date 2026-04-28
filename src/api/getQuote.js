@@ -15,12 +15,6 @@ export async function getQuote(ticker) {
       return null;
     }
 
-    // ✅ 기존 오염된 캐시 전체 초기화 (임시 처리)
-    try {
-      localStorage.clear();
-      console.debug('✅ 기존 캐시 모두 초기화 완료');
-    } catch (e) {}
-
     // 캐시 데이터 확인 (1시간 유효기간)
     try {
       const cached = localStorage.getItem(CACHE_KEY);
