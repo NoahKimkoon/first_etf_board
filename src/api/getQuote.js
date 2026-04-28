@@ -34,6 +34,8 @@ export async function getQuote(ticker) {
     }
 
     // 캐시가 없을 때만 Naver Finance 프록시 API 호출
+    console.warn(" 캐시가 없을 때만 Naver Finance 프록시 API 호출");
+    console.warn(" clenTicker:"+cleanTicker);
     const response = await fetch(`/api/stock?ticker=${encodeURIComponent(cleanTicker)}`, {
       method: 'GET',
       headers: {
@@ -46,6 +48,7 @@ export async function getQuote(ticker) {
     }
 
     const data = await response.json();
+    console.warn(" data:"+data);
 
     if (data.error) {
       throw new Error(data.error || '종목코드를 찾을 수 없습니다');
@@ -68,6 +71,7 @@ export async function getQuote(ticker) {
       marketState: data.marketStatus,
       lastUpdated: new Date()
     };
+    console.warn("stockData:"+stockData);
 
     // ✅ 성공했으면 1시간 캐시에 저장
     try {

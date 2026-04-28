@@ -52,7 +52,7 @@ export function detectCurrency(ticker) {
   if (!ticker) return 'KRW';
   const upperTicker = ticker.toUpperCase().trim();
   
-  if (upperTicker.endsWith('.KS') || upperTicker.endsWith('.KQ')) {
+  if (upperTicker.endsWith('.KS') || upperTicker.endsWith('.KQ') || upperTicker.endsWith('.KSC')) {
     return 'KRW';
   }
   
