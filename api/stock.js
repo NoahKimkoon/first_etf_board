@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       // ✅ 국내 주식: .KS 제거 후 네이버 금융 API 호출
       const pureTicker = ticker.replace('.KS', '');
       result = await fetchNaverStock(pureTicker);
-      // result.ticker = ticker; // 원본 티커 유지
+      result.ticker = ticker; // 원본 티커 유지
     } else {
       // ✅ 해외 주식: 그대로 야후 파이낸스 API 호출
       result = await fetchYahooStock(ticker);
@@ -59,6 +59,7 @@ export default async function handler(req, res) {
  */
 async function fetchNaverStock(ticker) {
   const apiUrl = `https://polling.finance.naver.com/api/realtime/domestic/stock/${ticker}`;
+  console.warn ("API:"+apiUrl);
   
   const response = await fetch(apiUrl, {
     method: 'GET',
