@@ -27,15 +27,17 @@ export default async function handler(req, res) {
 
     ticker = ticker.trim().toUpperCase();
 
-    // 티커 판별 로직
-    const isKoreanStock = /^\d{6}$/.test(ticker);
+    // 티커 판별 로직: .KS 접미사로 국내 주식 구분
+    const isKoreanStock = ticker.endsWith('.KS');
     let result;
 
     if (isKoreanStock) {
-      // ✅ 국내 주식: 네이버 금융 API
-      result = await fetchNaverStock(ticker);
+      // ✅ 국내 주식: .KS 제거 후 네이버 금융 API 호출
+      const pureTicker = ticker.replace('.KS', '');
+      result = await fetchNaverStock(pureTicker);
+      result.ticker = ticker; // 원본 티커 유지
     } else {
-      // ✅ 해외 주식: 야후 파이낸스 API
+      // ✅ 해외 주식: 그대로 야후 파이낸스 API 호출
       result = await fetchYahooStock(ticker);
     }
 
