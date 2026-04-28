@@ -5,7 +5,8 @@
  * ✅ 실패시에만 재시도
  */
 export async function getQuote(ticker) {
-  const cleanTicker = ticker.trim().toUpperCase();
+  // const cleanTicker = ticker.trim().toUpperCase();
+  const cleanTicker = ticker.replace('.KS', '');
   const CACHE_KEY = `stock_cache_${cleanTicker}`;
   const CACHE_TTL = 60 * 60 * 1000; // 1시간 유효기간
 
