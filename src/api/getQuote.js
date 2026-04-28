@@ -1,90 +1,76 @@
 /**
- * Alpha Vantage 시세 조회 API
- * 클라이언트 사이드 CORS 지원
- * ✅ 기존 인터페이스 완전 호환 유지
- * ✅ 호출 제한 오류 처리 추가
- * ✅ localStorage 5분 캐싱 적용
+ * Yahoo Finance 시세 조회 API
+ * 클라이언트 사이드 영구 캐싱 적용
+ * ✅ 한 번 성공하면 영구히 캐시 사용 (API 호출 안 함)
+ * ✅ 실패시에만 재시도
  */
 export async function getQuote(ticker) {
   const cleanTicker = ticker.trim().toUpperCase();
-  const CACHE_KEY = `stock_cache_${cleanTicker}`;
-  const CACHE_TTL = 5 * 60 * 1000; // 5분
+  const CACHE_KEY = `stock_permanent_${cleanTicker}`;
 
   try {
     if (!ticker || ticker.trim() === '') {
       return null;
     }
 
-    // 캐시 데이터 확인
+    // 캐시 데이터 확인 (한 번 저장되면 영구 사용)
     try {
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
         const cacheData = JSON.parse(cached);
-        const now = Date.now();
-        
-        if (now - cacheData.timestamp < CACHE_TTL) {
-          console.debug(`캐시 사용: ${cleanTicker} (${Math.round((now - cacheData.timestamp)/1000)}초 전)`);
-          return {
-            ...cacheData.data,
-            lastUpdated: new Date(cacheData.timestamp)
-          };
-        }
+        console.debug(`영구 캐시 사용: ${cleanTicker}`);
+        return {
+          ...cacheData,
+          lastUpdated: new Date(cacheData.lastUpdated)
+        };
       }
     } catch (e) {
-      // localStorage 오류 무시하고 계속 진행
       console.debug('로컬 캐시 접근 오류', e);
     }
 
-    // Alpha Vantage 프록시 API 호출
-    const response = await fetch(`/api/stock?ticker=${encodeURIComponent(cleanTicker)}`, {
+    // 캐시가 없을 때만 Yahoo Finance 프록시 API 호출
+    const response = await fetch(`/api/stock/v8/finance/chart/${encodeURIComponent(cleanTicker)}?interval=1m&range=1d`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
       }
     });
 
-    if (response.status === 429) {
-      throw new Error('잠시 후 다시 시도해 주세요. 요청 제한이 발생했습니다. (무료 티어는 분당 5회 요청 제한이 있습니다)');
-    }
-
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API 응답 오류: ${response.status}`);
+      throw new Error(`API 응답 오류: ${response.status}`);
     }
 
     const data = await response.json();
 
-    if (data.quoteResponse?.error) {
-      throw new Error(data.quoteResponse.error.description || '티커를 찾을 수 없습니다');
+    if (data.chart?.error) {
+      throw new Error(data.chart.error.description || '티커를 찾을 수 없습니다');
     }
 
-    const result = data.quoteResponse?.result?.[0];
+    const result = data.chart?.result?.[0];
     if (!result) {
       throw new Error('데이터 형식 오류');
     }
 
-    const currentPrice = result.regularMarketPrice;
-    const change = result.regularMarketChange;
-    const changePercent = result.regularMarketChangePercent;
+    const meta = result.meta;
+    const currentPrice = meta.regularMarketPrice;
+    const previousClose = meta.chartPreviousClose || meta.previousClose;
     
     const stockData = {
       ticker: cleanTicker,
       price: currentPrice,
-      previousClose: currentPrice - change,
-      change: change,
-      changePercent: changePercent.toFixed(2),
-      currency: 'USD',
-      fiftyTwoWeekHigh: null,
-      fiftyTwoWeekLow: null,
+      previousClose: previousClose,
+      change: currentPrice - previousClose,
+      changePercent: ((currentPrice - previousClose) / previousClose * 100).toFixed(2),
+      currency: meta.currency,
+      fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh,
+      fiftyTwoWeekLow: meta.fiftyTwoWeekLow,
       lastUpdated: new Date()
     };
 
-    // 성공적으로 데이터를 가져왔으면 캐시에 저장
+    // ✅ 성공했으면 영구 캐시에 저장 (앱 종료/새로고침 후에도 유지)
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({
-        timestamp: Date.now(),
-        data: stockData
-      }));
+      localStorage.setItem(CACHE_KEY, JSON.stringify(stockData));
+      console.debug(`캐시 저장 완료: ${cleanTicker} (이후 API 호출 안 함)`);
     } catch (e) {
       console.debug('로컬 캐시 저장 오류', e);
     }

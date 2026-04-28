@@ -1,9 +1,9 @@
 /**
- * Vercel Serverless Function - Alpha Vantage Stock API
+ * Vercel Serverless Function - Yahoo Finance Proxy
  * 
- * ✅ 야후 API 대체로 Alpha Vantage 사용
- * ✅ 기존 데이터 형식과 호환성 유지
- * ✅ 호출 제한 오류 처리 추가
+ * ✅ 야후 차단 방지 정교한 헤더 적용
+ * ✅ CORS 자동 처리
+ * ✅ 로컬/배포 환경 동일 경로 지원
  */
 export default async function handler(req, res) {
   try {
@@ -15,76 +15,48 @@ export default async function handler(req, res) {
       return res.status(200).end();
     }
 
-    // 쿼리 파라미터에서 티커 추출
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const ticker = url.searchParams.get('ticker');
-
-    if (!ticker) {
-      return res.status(400).json({ error: 'ticker 파라미터가 필요합니다' });
-    }
-
-    // Alpha Vantage API 키 확인
-    const apiKey = process.env.STOCK_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'STOCK_API_KEY 환경 변수가 설정되지 않았습니다' });
-    }
-
-    // Alpha Vantage API 호출
-    const apiUrl = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(ticker)}&apikey=${apiKey}`;
+    // 요청 경로에서 /api/stock 부분 제거
+    const yahooPath = req.url.replace(/^\/api\/stock/, '');
     
-    const response = await fetch(apiUrl, {
-      method: 'GET',
+    if (!yahooPath || yahooPath === '/') {
+      return res.status(400).json({ error: '요청 경로가 올바르지 않습니다' });
+    }
+
+    // Yahoo Finance 실제 엔드포인트
+    const yahooUrl = `https://query1.finance.yahoo.com${yahooPath}`;
+
+    // 야후 차단 방지 헤더 세트
+    const response = await fetch(yahooUrl, {
+      method: req.method,
       headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'application/json',
-        'User-Agent': 'ETF-Board-App/1.0'
+        'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
+        'Referer': 'https://finance.yahoo.com/',
+        'Origin': 'https://finance.yahoo.com',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
       }
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Yahoo API Status: ${response.status}`);
+
       return res.status(response.status).json({ 
-        error: `Alpha Vantage API 오류: ${response.status}`,
-        retryAfter: 60
+        error: `Yahoo API 오류: ${response.status}`,
+        details: errorText.slice(0, 120)
       });
     }
 
     const data = await response.json();
 
-    // Alpha Vantage 제한 초과 응답 확인
-    if (data['Information'] && data['Information'].includes('rate limit')) {
-      return res.status(429).json({
-        error: 'API 호출 제한에 도달했습니다',
-        message: 'Alpha Vantage 무료 티어는 분당 5회, 일일 500회 제한이 있습니다',
-        retryAfter: 60
-      });
-    }
-
-    // 데이터가 없는 경우
-    if (!data['Global Quote'] || Object.keys(data['Global Quote']).length === 0) {
-      return res.status(404).json({ error: `티커 ${ticker}의 데이터를 찾을 수 없습니다` });
-    }
-
-    // Alpha Vantage 응답을 기존 형식과 매핑
-    const quote = data['Global Quote'];
-    const mappedData = {
-      quoteResponse: {
-        result: [{
-          symbol: quote['01. symbol'],
-          regularMarketPrice: parseFloat(quote['05. price']),
-          regularMarketChange: parseFloat(quote['09. change']),
-          regularMarketChangePercent: parseFloat(quote['10. change percent'].replace('%', '')),
-          marketState: 'REGULAR',
-          tradeable: true
-        }],
-        error: null
-      }
-    };
-
-    // CORS 및 캐싱 헤더
+    // CORS 헤더 추가
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=3600');
 
-    return res.status(200).json(mappedData);
+    return res.status(200).json(data);
 
   } catch (error) {
     console.error('Stock API 오류:', error);
