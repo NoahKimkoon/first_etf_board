@@ -33,8 +33,8 @@ export async function getQuote(ticker) {
       console.debug('로컬 캐시 접근 오류', e);
     }
 
-    // 캐시가 없을 때만 Yahoo Finance 프록시 API 호출
-    const response = await fetch(`/api/stock/v8/finance/chart/${encodeURIComponent(cleanTicker)}?interval=1m&range=1d`, {
+    // 캐시가 없을 때만 Naver Finance 프록시 API 호출
+    const response = await fetch(`/api/stock?ticker=${encodeURIComponent(cleanTicker)}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -47,28 +47,25 @@ export async function getQuote(ticker) {
 
     const data = await response.json();
 
-    if (data.chart?.error) {
-      throw new Error(data.chart.error.description || '티커를 찾을 수 없습니다');
+    if (data.error) {
+      throw new Error(data.error || '종목코드를 찾을 수 없습니다');
     }
 
-    const result = data.chart?.result?.[0];
-    if (!result) {
-      throw new Error('데이터 형식 오류');
-    }
-
-    const meta = result.meta;
-    const currentPrice = meta.regularMarketPrice;
-    const previousClose = meta.chartPreviousClose || meta.previousClose;
+    // 네이버 금융 데이터 매핑
+    const currentPrice = parseInt(data.closePrice);
+    const previousClose = parseInt(data.previousClosePrice);
+    const change = parseInt(data.compareToPreviousClosePrice);
+    const changePercent = parseFloat(data.fluctuationsRatio);
     
     const stockData = {
       ticker: cleanTicker,
+      name: data.stockName,
       price: currentPrice,
       previousClose: previousClose,
-      change: currentPrice - previousClose,
-      changePercent: ((currentPrice - previousClose) / previousClose * 100).toFixed(2),
-      currency: meta.currency,
-      fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh,
-      fiftyTwoWeekLow: meta.fiftyTwoWeekLow,
+      change: change,
+      changePercent: changePercent.toFixed(2),
+      currency: 'KRW',
+      marketState: data.marketStatus,
       lastUpdated: new Date()
     };
 

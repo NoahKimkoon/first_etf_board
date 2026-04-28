@@ -1,9 +1,10 @@
 /**
- * Vercel Serverless Function - Yahoo Finance Proxy
+ * Vercel Serverless Function - Naver Finance Real-time API Proxy
  * 
- * ✅ 야후 차단 방지 정교한 헤더 적용
+ * ✅ 국내 주식/ETF 실시간 시세 지원
+ * ✅ 네이버 금융 API 프록시
  * ✅ CORS 자동 처리
- * ✅ 로컬/배포 환경 동일 경로 지원
+ * ✅ 국내 IP 차단 회피
  */
 export default async function handler(req, res) {
   try {
@@ -15,48 +16,54 @@ export default async function handler(req, res) {
       return res.status(200).end();
     }
 
-    // 요청 경로에서 /api/stock 부분 제거
-    const yahooPath = req.url.replace(/^\/api\/stock/, '');
-    
-    if (!yahooPath || yahooPath === '/') {
-      return res.status(400).json({ error: '요청 경로가 올바르지 않습니다' });
+    // 쿼리 파라미터에서 티커 추출
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    let ticker = url.searchParams.get('ticker');
+
+    if (!ticker) {
+      return res.status(400).json({ error: 'ticker 파라미터가 필요합니다' });
     }
 
-    // Yahoo Finance 실제 엔드포인트
-    const yahooUrl = `https://query1.finance.yahoo.com${yahooPath}`;
+    // 티커 정리 (숫자만 남김)
+    ticker = ticker.replace(/[^0-9]/g, '');
 
-    // 야후 차단 방지 헤더 세트
-    const response = await fetch(yahooUrl, {
-      method: req.method,
+    if (ticker.length !== 6) {
+      return res.status(400).json({ error: '유효한 6자리 국내 종목코드를 입력해주세요' });
+    }
+
+    // 네이버 금융 실시간 API 호출
+    const apiUrl = `https://polling.finance.naver.com/api/realtime/domestic/stock/${ticker}`;
+    
+    const response = await fetch(apiUrl, {
+      method: 'GET',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
-        'Referer': 'https://finance.yahoo.com/',
-        'Origin': 'https://finance.yahoo.com',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
+        'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Referer': 'https://finance.naver.com/',
+        'Cache-Control': 'no-cache'
       }
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Yahoo API Status: ${response.status}`);
-
       return res.status(response.status).json({ 
-        error: `Yahoo API 오류: ${response.status}`,
-        details: errorText.slice(0, 120)
+        error: `네이버 금융 API 오류: ${response.status}`
       });
     }
 
     const data = await response.json();
 
-    // CORS 헤더 추가
+    // 응답 데이터 확인
+    if (!data.datas || data.datas.length === 0) {
+      return res.status(404).json({ error: `종목코드 ${ticker}의 데이터를 찾을 수 없습니다` });
+    }
+
+    // CORS 및 캐싱 헤더
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=3600');
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
 
-    return res.status(200).json(data);
+    return res.status(200).json(data.datas[0]);
 
   } catch (error) {
     console.error('Stock API 오류:', error);
