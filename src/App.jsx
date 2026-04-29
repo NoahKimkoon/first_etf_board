@@ -63,6 +63,8 @@ function App() {
   const chartInstance = useRef(null);
   const pieChartRef = useRef(null);
   const pieChartInstance = useRef(null);
+  const futureAssetChartRef = useRef(null);
+  const futureAssetChartInstance = useRef(null);
 
   // ✅ Firestore 실시간 리스너 설정
   useEffect(() => {
@@ -281,6 +283,101 @@ function App() {
       totalProfit
     };
   }, [kidsEtfs, prices]);
+
+  // ✅ 미래 자산 계산기 상태
+  const [futureAssetParams, setFutureAssetParams] = useState({
+    expectedRate: 7,
+    monthlyInvestment: 500000
+  });
+
+  // ✅ 미래 자산 복리 계산
+  const futureAssetData = useMemo(() => {
+    const initialAmount = kidsTotalData.totalBuy;
+    const monthlyRate = futureAssetParams.expectedRate / 100 / 12;
+    const monthlyAdd = futureAssetParams.monthlyInvestment;
+    
+    const yearlyData = [];
+    let currentAmount = initialAmount;
+
+    yearlyData.push({ year: 0, amount: Math.round(currentAmount) });
+
+    for (let year = 1; year <= 10; year++) {
+      for (let month = 1; month <= 12; month++) {
+        currentAmount = currentAmount * (1 + monthlyRate) + monthlyAdd;
+      }
+      yearlyData.push({ year, amount: Math.round(currentAmount) });
+    }
+
+    const finalAmount = yearlyData[yearlyData.length - 1].amount;
+    const totalInvestment = initialAmount + (monthlyAdd * 120);
+    const expectedProfit = finalAmount - totalInvestment;
+
+    return {
+      yearlyData,
+      finalAmount,
+      totalInvestment,
+      expectedProfit
+    };
+  }, [kidsTotalData.totalBuy, futureAssetParams]);
+
+  // ✅ 미래 자산 차트 업데이트
+  useEffect(() => {
+    if (futureAssetChartRef.current && kidsEtfs.length > 0) {
+      if (futureAssetChartInstance.current) {
+        futureAssetChartInstance.current.destroy();
+      }
+      
+      const ctx = futureAssetChartRef.current.getContext('2d');
+      futureAssetChartInstance.current = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: futureAssetData.yearlyData.map(item => `${item.year}년`),
+          datasets: [{
+            label: '예상 자산',
+            data: futureAssetData.yearlyData.map(item => item.amount),
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.2)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 4,
+            pointBackgroundColor: '#10b981',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) => {
+                  return `${formatNumber(Math.round(context.raw))} 원`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: { 
+              beginAtZero: true, 
+              grid: { color: isDarkMode ? '#334155' : '#e2e8f0' },
+              ticks: {
+                color: isDarkMode ? '#cbd5e1' : '#475569',
+                callback: (value) => formatNumber(value / 10000000) + '억'
+              }
+            },
+            x: { 
+              grid: { display: false }, 
+              ticks: { color: isDarkMode ? '#cbd5e1' : '#475569' } 
+            }
+          }
+        }
+      });
+    }
+    
+    return () => { if (futureAssetChartInstance.current) futureAssetChartInstance.current.destroy(); };
+  }, [futureAssetData, isDarkMode, kidsEtfs.length]);
 
   // ✅ 배당 정보 업데이트 함수
   const updateDividendInfo = (etfId, field, value) => {
@@ -1151,6 +1248,55 @@ function App() {
                   </>
                 );
               })()}
+            </div>
+
+            {/* ✅ 미래 자산 계산기 */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-md p-6 mt-6 border border-slate-200 dark:border-slate-700 hover:shadow-lg transition">
+              <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-4">📈 10년 미래 자산 계산기</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1">예상 연 수익률 (%)</label>
+                  <input
+                    type="number"
+                    value={futureAssetParams.expectedRate}
+                    onChange={(e) => setFutureAssetParams({...futureAssetParams, expectedRate: parseFloat(e.target.value) || 0})}
+                    className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1">매월 추가 투자금액 (원)</label>
+                  <input
+                    type="number"
+                    value={futureAssetParams.monthlyInvestment}
+                    onChange={(e) => setFutureAssetParams({...futureAssetParams, monthlyInvestment: parseInt(e.target.value) || 0})}
+                    className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-emerald-50 dark:bg-emerald-900/30 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800">
+                  <p className="text-sm text-emerald-700 dark:text-emerald-400">10년 후 예상 자산</p>
+                  <p className="text-xl font-bold text-emerald-600 dark:text-emerald-300">{formatNumber(futureAssetData.finalAmount)} 원</p>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-4">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">총 투자금액</p>
+                  <p className="text-xl font-bold text-slate-800 dark:text-slate-200">{formatNumber(futureAssetData.totalInvestment)} 원</p>
+                </div>
+                <div className="bg-blue-50 dark:bg-blue-900/30 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
+                  <p className="text-sm text-blue-700 dark:text-blue-400">예상 수익금</p>
+                  <p className="text-xl font-bold text-blue-600 dark:text-blue-300">+ {formatNumber(futureAssetData.expectedProfit)} 원</p>
+                </div>
+              </div>
+
+              <div className="h-64">
+                <canvas ref={futureAssetChartRef}></canvas>
+              </div>
+
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-4">
+                ✅ 현재 원금을 기반으로 매월 복리 계산 / 세금 및 수수료는 포함되지 않은 예상치입니다
+              </p>
             </div>
         </div>
 
