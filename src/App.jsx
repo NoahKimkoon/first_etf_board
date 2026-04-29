@@ -284,39 +284,68 @@ function App() {
     };
   }, [kidsEtfs, prices]);
 
+  // ✅ 현재 보유 종목 평균 수익률 계산
+  const currentAverageReturn = useMemo(() => {
+    if (kidsEtfs.length === 0) return 0;
+    
+    let totalWeight = 0;
+    let weightedReturn = 0;
+
+    kidsEtfs.forEach(etf => {
+      const price = prices[etf.id]?.priceKrw;
+      const currentValue = price ? price * etf.quantity : etf.buyPrice;
+      const returnRate = etf.buyPrice > 0 ? ((currentValue - etf.buyPrice) / etf.buyPrice * 100) : 0;
+      
+      weightedReturn += returnRate * currentValue;
+      totalWeight += currentValue;
+    });
+
+    return totalWeight > 0 ? Math.round(weightedReturn / totalWeight * 10) / 10 : 0;
+  }, [kidsEtfs, prices]);
+
   // ✅ 미래 자산 계산기 상태
   const [futureAssetParams, setFutureAssetParams] = useState({
     expectedRate: 7,
     monthlyInvestment: 500000
   });
 
-  // ✅ 미래 자산 복리 계산
+  // ✅ 미래 자산 복리 계산 (두가지 시나리오)
   const futureAssetData = useMemo(() => {
     const initialAmount = kidsTotalData.totalBuy;
-    const monthlyRate = futureAssetParams.expectedRate / 100 / 12;
+    const monthlyRateCustom = futureAssetParams.expectedRate / 100 / 12;
+    const monthlyRateMarket = 8 / 100 / 12;
     const monthlyAdd = futureAssetParams.monthlyInvestment;
     
-    const yearlyData = [];
-    let currentAmount = initialAmount;
+    const yearlyDataCustom = [];
+    const yearlyDataMarket = [];
+    let currentAmountCustom = initialAmount;
+    let currentAmountMarket = initialAmount;
 
-    yearlyData.push({ year: 0, amount: Math.round(currentAmount) });
+    yearlyDataCustom.push({ year: 0, amount: Math.round(currentAmountCustom) });
+    yearlyDataMarket.push({ year: 0, amount: Math.round(currentAmountMarket) });
 
     for (let year = 1; year <= 10; year++) {
       for (let month = 1; month <= 12; month++) {
-        currentAmount = currentAmount * (1 + monthlyRate) + monthlyAdd;
+        currentAmountCustom = currentAmountCustom * (1 + monthlyRateCustom) + monthlyAdd;
+        currentAmountMarket = currentAmountMarket * (1 + monthlyRateMarket) + monthlyAdd;
       }
-      yearlyData.push({ year, amount: Math.round(currentAmount) });
+      yearlyDataCustom.push({ year, amount: Math.round(currentAmountCustom) });
+      yearlyDataMarket.push({ year, amount: Math.round(currentAmountMarket) });
     }
 
-    const finalAmount = yearlyData[yearlyData.length - 1].amount;
+    const finalAmount = yearlyDataCustom[yearlyDataCustom.length - 1].amount;
     const totalInvestment = initialAmount + (monthlyAdd * 120);
     const expectedProfit = finalAmount - totalInvestment;
+    const inflationRate = 0.03;
+    const presentValue = Math.round(finalAmount / Math.pow(1 + inflationRate, 10));
 
     return {
-      yearlyData,
+      yearlyDataCustom,
+      yearlyDataMarket,
       finalAmount,
       totalInvestment,
-      expectedProfit
+      expectedProfit,
+      presentValue
     };
   }, [kidsTotalData.totalBuy, futureAssetParams]);
 
@@ -331,29 +360,50 @@ function App() {
       futureAssetChartInstance.current = new Chart(ctx, {
         type: 'line',
         data: {
-          labels: futureAssetData.yearlyData.map(item => `${item.year}년`),
-          datasets: [{
-            label: '예상 자산',
-            data: futureAssetData.yearlyData.map(item => item.amount),
-            borderColor: '#10b981',
-            backgroundColor: 'rgba(16, 185, 129, 0.2)',
-            fill: true,
-            tension: 0.4,
-            pointRadius: 4,
-            pointBackgroundColor: '#10b981',
-            pointBorderColor: '#fff',
-            pointBorderWidth: 2
-          }]
+          labels: futureAssetData.yearlyDataCustom.map(item => `${item.year}년`),
+          datasets: [
+            {
+              label: '설정 수익률',
+              data: futureAssetData.yearlyDataCustom.map(item => item.amount),
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.15)',
+              fill: true,
+              tension: 0.4,
+              pointRadius: 3,
+              pointBackgroundColor: '#10b981',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2
+            },
+            {
+              label: '시장 평균 (8%)',
+              data: futureAssetData.yearlyDataMarket.map(item => item.amount),
+              borderColor: '#3b82f6',
+              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              fill: false,
+              tension: 0.4,
+              borderDash: [5, 5],
+              pointRadius: 2,
+              pointBackgroundColor: '#3b82f6'
+            }
+          ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { display: false },
+            legend: { 
+              display: true,
+              position: 'top',
+              labels: {
+                color: isDarkMode ? '#cbd5e1' : '#475569',
+                usePointStyle: true,
+                padding: 20
+              }
+            },
             tooltip: {
               callbacks: {
                 label: (context) => {
-                  return `${formatNumber(Math.round(context.raw))} 원`;
+                  return `${context.dataset.label}: ${formatNumber(Math.round(context.raw))} 원`;
                 }
               }
             }
@@ -1254,7 +1304,7 @@ function App() {
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-md p-6 mt-6 border border-slate-200 dark:border-slate-700 hover:shadow-lg transition">
               <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-4">📈 10년 미래 자산 계산기</h2>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div>
                   <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1">예상 연 수익률 (%)</label>
                   <input
@@ -1273,12 +1323,23 @@ function App() {
                     className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={() => setFutureAssetParams({...futureAssetParams, expectedRate: currentAverageReturn})}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-3 font-medium transition text-sm"
+                  >
+                    📊 현재 수익률 불러오기 ({currentAverageReturn}%)
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-emerald-50 dark:bg-emerald-900/30 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800">
                   <p className="text-sm text-emerald-700 dark:text-emerald-400">10년 후 예상 자산</p>
                   <p className="text-xl font-bold text-emerald-600 dark:text-emerald-300">{formatNumber(futureAssetData.finalAmount)} 원</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    💵 현재 가치 환산: {formatNumber(futureAssetData.presentValue)} 원
+                  </p>
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-4">
                   <p className="text-sm text-slate-500 dark:text-slate-400">총 투자금액</p>
@@ -1287,6 +1348,10 @@ function App() {
                 <div className="bg-blue-50 dark:bg-blue-900/30 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
                   <p className="text-sm text-blue-700 dark:text-blue-400">예상 수익금</p>
                   <p className="text-xl font-bold text-blue-600 dark:text-blue-300">+ {formatNumber(futureAssetData.expectedProfit)} 원</p>
+                </div>
+                <div className="bg-amber-50 dark:bg-amber-900/30 rounded-xl p-4 border border-amber-200 dark:border-amber-800">
+                  <p className="text-sm text-amber-700 dark:text-amber-400">현재 평균 수익률</p>
+                  <p className="text-xl font-bold text-amber-600 dark:text-amber-300">{currentAverageReturn} %</p>
                 </div>
               </div>
 
