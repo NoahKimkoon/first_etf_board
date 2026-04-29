@@ -245,12 +245,12 @@ function App() {
     });
 
     // ✅ 원화 통일 수익률 계산식
-    const totalReturn = totalBuy > 0 ? ((totalCurrent - totalBuy) / totalBuy * 100).toFixed(2) : 0;
-    const totalProfit = totalCurrent - totalBuy;
+    const totalReturn = totalBuy > 0 ? Math.round((totalCurrent - totalBuy) / totalBuy * 100) : 0;
+    const totalProfit = Math.round(totalCurrent - totalBuy);
 
     return {
-      totalBuy,
-      totalCurrent,
+      totalBuy: Math.round(totalBuy),
+      totalCurrent: Math.round(totalCurrent),
       totalReturn,
       totalProfit
     };
@@ -271,12 +271,12 @@ function App() {
       }
     });
 
-    const totalReturn = totalBuy > 0 ? ((totalCurrent - totalBuy) / totalBuy * 100).toFixed(2) : 0;
-    const totalProfit = totalCurrent - totalBuy;
+    const totalReturn = totalBuy > 0 ? Math.round((totalCurrent - totalBuy) / totalBuy * 100) : 0;
+    const totalProfit = Math.round(totalCurrent - totalBuy);
 
     return {
-      totalBuy,
-      totalCurrent,
+      totalBuy: Math.round(totalBuy),
+      totalCurrent: Math.round(totalCurrent),
       totalReturn,
       totalProfit
     };
