@@ -10,6 +10,7 @@ export const ETF_PRESET = [
   { id: 8, name: 'TIGER 미국나스닥100', ticker: '133690.KS', category: '국내' },
   { id: 9, name: 'TIGER 미국 S&P 500', ticker: '360750.KS', category: '국내' },
   { id: 10, name: 'TIGER 미국 배당다우존스', ticker: '458730.KS', category: '국내' },
+  { id: 11, name: 'TIGER 미국나스닥100(H)', ticker: '448300.KS', category: '국내' },
   
   
   // 미국 ETF
@@ -28,7 +29,7 @@ export const ETF_PRESET = [
   { id: 202, name: 'Invesco QQQ', ticker: 'QQQ', category: '미국' },
   { id: 203, name: '글로벌엑스 나스닥 100 커버드콜', ticker: 'QYLD', category: '미국' },
   { id: 204, name: 'Vanguard S&P 500', ticker: 'VOO', category: '미국' },
-  { id: 205, name: 'TLT 장기채', ticker: 'TLT', category: '채권' },
+  { id: 205, name: 'Global X NASDAQ 100 Covered Call ETF', ticker: 'QYLD', category: '미국' },
 ];
 
 export default ETF_PRESET;
